@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shabu-shabu</title>
+<style>
+  :root { --bg:#f6f1e7; --card:#ebe3d3; --ink:#2b2118; --muted:#7a6a58; --accent:#b8321f; --line:rgba(43,33,24,.18); }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1d1814; --card:#2a231d; --ink:#f1e9dc; --muted:#a8998a; --accent:#e5533d; --line:rgba(241,233,220,.18); }
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--ink); font-family:"Hiragino Sans","Noto Sans JP","Noto Sans Thai",system-ui,sans-serif; min-height:100vh; display:flex; justify-content:center; padding:20px; user-select:none; }
+  #game { width:100%; max-width:680px; }
+  h1 { font-size:22px; font-weight:500; margin-bottom:4px; }
+  p.sub { font-size:14px; color:var(--muted); line-height:1.6; margin-bottom:16px; }
+  button { font:inherit; font-size:15px; padding:10px 26px; background:transparent; color:var(--ink); border:1px solid var(--ink); border-radius:8px; cursor:pointer; }
+  button:hover { background:var(--card); }
+  button:focus-visible, .dip:focus-visible, #pot:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  #stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }
+  .stat { background:var(--card); border-radius:8px; padding:10px 12px; }
+  .stat span { display:block; font-size:12px; color:var(--muted); }
+  .stat b { font-size:22px; font-weight:500; }
+  #timer { height:6px; background:var(--card); border-radius:3px; overflow:hidden; margin-bottom:14px; }
+  #bar { height:100%; width:100%; background:var(--accent); }
+  #belt-wrap { height:84px; overflow:hidden; background:var(--card); border-radius:8px; border-top:2px solid var(--line); border-bottom:2px solid var(--line); position:relative; margin-bottom:16px; }
+  #belt { display:flex; position:absolute; top:0; height:100%; align-items:center; width:max-content; animation:slide 24s linear infinite; }
+  @keyframes slide { to { transform:translateX(-50%); } }
+  .food { display:flex; flex-direction:column; align-items:center; gap:2px; padding:0 18px; cursor:pointer; flex-shrink:0; transition:transform .15s; }
+  .food:hover { transform:scale(1.15); }
+  .food.gone { opacity:.2; pointer-events:none; }
+  .food i { font-style:normal; font-size:30px; }
+  .food small { font-size:11px; color:var(--muted); }
+  #pot-area { position:relative; height:200px; display:flex; justify-content:center; align-items:flex-start; margin-bottom:8px; }
+  #pot { position:relative; width:240px; height:140px; background:#3a3029; border:3px solid #1c1511; border-radius:6px 6px 90px 90px; overflow:hidden; cursor:pointer; }
+  #broth { position:absolute; inset:14px 0 0 0; background:#d99a2b; border-radius:0 0 90px 90px; display:flex; align-items:center; justify-content:center; font-size:13px; color:#3a2406; }
+  #rim { position:absolute; top:0; left:0; right:0; height:14px; background:#5a4a3e; }
+  .bubble { position:absolute; bottom:0; border-radius:50%; background:rgba(255,236,170,.7); animation:rise 1.2s ease-in forwards; pointer-events:none; }
+  @keyframes rise { to { transform:translateY(-90px) scale(1.7); opacity:0; } }
+  #flame { position:absolute; bottom:6px; display:flex; gap:6px; }
+  #flame div { width:18px; height:30px; background:#e8642c; border-radius:50% 50% 20% 20%; animation:fl .4s ease-in-out infinite alternate; }
+  #flame div:nth-child(2) { height:38px; background:#f2a93b; animation-delay:.15s; }
+  @keyframes fl { to { transform:scaleX(1.15) scaleY(1.1); } }
+  .lbl { font-size:12px; color:var(--muted); margin-bottom:4px; }
+  #queue, #bowl { display:flex; gap:12px; flex-wrap:wrap; min-height:50px; background:var(--card); border-radius:8px; padding:8px 12px 16px; align-items:center; margin-bottom:12px; }
+  .cook { position:relative; font-size:24px; animation:bob .8s ease-in-out infinite alternate; }
+  .cook em { position:absolute; bottom:-14px; left:50%; transform:translateX(-50%); font-style:normal; font-size:10px; color:var(--muted); white-space:nowrap; }
+  .cook.ready em { color:var(--accent); font-weight:500; }
+  @keyframes bob { to { transform:translateY(-4px); } }
+  #dips { display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+  .dip { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px 14px; font-size:14px; cursor:pointer; }
+  .dip.on { border:2px solid var(--accent); padding:7px 13px; }
+  .eaten { font-size:20px; animation:pop .3s ease-out; }
+  @keyframes pop { from { transform:scale(.4); opacity:0; } }
+  #msg { font-size:14px; color:var(--muted); text-align:center; min-height:22px; }
+  #flash { position:fixed; top:38%; left:50%; transform:translateX(-50%); font-size:34px; font-weight:500; color:var(--accent); pointer-events:none; opacity:0; transition:opacity .3s; }
+  .screen { text-align:center; padding:30px 0; }
+  .screen .big { font-size:52px; margin-bottom:8px; }
+  [hidden] { display:none !important; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; } #belt { animation:none; overflow-x:auto; } }
+</style>
+</head>
+<body>
+<main id="game">
+
+  <section id="start" class="screen">
+    <div class="big">🍲</div>
+    <h1>Shabu-shabu</h1>
+    <p class="sub">Click food on the belt to drop it in the pot.<br>Wait until it says ready, then click the pot to eat.<br>Match the sauce to the food for 1.5x points. Eat quickly to build a combo.</p>
+    <button id="startBtn">Start eating</button>
+  </section>
+
+  <section id="play" hidden>
+    <div id="stats">
+      <div class="stat"><span>Score</span><b id="score">0</b></div>
+      <div class="stat"><span>Bites</span><b id="bites">0</b></div>
+      <div class="stat"><span>Combo</span><b id="combo">x1</b></div>
+    </div>
+    <div id="timer"><div id="bar"></div></div>
+    <div id="belt-wrap"><div id="belt"></div></div>
+    <div id="pot-area">
+      <div id="pot" tabindex="0" role="button" aria-label="Eat ready food from the pot">
+        <div id="rim"></div>
+        <div id="broth"><span>click to eat</span></div>
+      </div>
+      <div id="flame" style="position:absolute;bottom:0"><div></div><div></div><div></div></div>
+    </div>
+    <div class="lbl">Cooking</div>
+    <div id="queue"></div>
+    <div class="lbl">Dipping sauce</div>
+    <div id="dips">
+      <div class="dip on" tabindex="0" data-d="ponzu">Ponzu</div>
+      <div class="dip" tabindex="0" data-d="sesame">Sesame</div>
+      <div class="dip" tabindex="0" data-d="spicy">Spicy miso</div>
+    </div>
+    <div class="lbl">Bowl</div>
+    <div id="bowl"></div>
+    <div id="msg"></div>
+  </section>
+
+  <section id="over" class="screen" hidden>
+    <div class="big">🍜</div>
+    <h1>Gochisousama deshita!</h1>
+    <p class="sub" id="final"></p>
+    <button id="againBtn">Eat again</button>
+  </section>
+</main>
+<div id="flash"></div>
+
+<script>
+const FOODS = [
+  {e:'🥩', n:'Wagyu',    t:3,   p:30, m:['ponzu','sesame']},
+  {e:'🦐', n:'Shrimp',   t:2.5, p:20, m:['ponzu','spicy']},
+  {e:'🧈', n:'Tofu',     t:2,   p:10, m:['sesame']},
+  {e:'🍄', n:'Shimeji',  t:2.5, p:15, m:['sesame','ponzu']},
+  {e:'🥬', n:'Napa',     t:2,   p:8,  m:['ponzu','spicy']},
+  {e:'🍜', n:'Noodles',  t:3.5, p:25, m:['sesame','spicy']},
+  {e:'🐟', n:'Sea bass', t:3,   p:22, m:['ponzu']},
+  {e:'🦪', n:'Scallop',  t:3,   p:28, m:['ponzu','sesame']},
+  {e:'🥕', n:'Carrot',   t:3,   p:8,  m:['spicy']},
+  {e:'🧅', n:'Leek',     t:2,   p:12, m:['sesame','ponzu']}
+];
+const DIPS = {ponzu:'Ponzu', sesame:'Sesame', spicy:'Spicy miso'};
+const DURATION = 60;
+const $ = id => document.getElementById(id);
+
+let score, bites, combo, timeLeft, active, queue, dip, lastEat, tick, bubbles;
+
+function show(id){ ['start','play','over'].forEach(s => $(s).hidden = s !== id); }
+function say(t){ $('msg').textContent = t; }
+
+function start(){
+  score = 0; bites = 0; combo = 1; timeLeft = DURATION; queue = []; dip = 'ponzu'; lastEat = 0; active = true;
+  $('bowl').innerHTML = '';
+  document.querySelectorAll('.dip').forEach(d => d.classList.toggle('on', d.dataset.d === 'ponzu'));
+  buildBelt(); renderStats(); renderQueue(); show('play');
+  say('Click food on the belt to drop it in the pot.');
+  clearInterval(tick); clearInterval(bubbles);
+  tick = setInterval(loop, 100);
+  bubbles = setInterval(bubble, 300);
+}
+
+function buildBelt(){
+  const belt = $('belt'); belt.innerHTML = '';
+  for (let r = 0; r < 4; r++) FOODS.forEach(f => {
+    const d = document.createElement('div');
+    d.className = 'food';
+    d.innerHTML = `<i>${f.e}</i><small>${f.n}</small>`;
+    d.onclick = () => grab(f, d);
+    belt.appendChild(d);
+  });
+}
+
+function grab(f, el){
+  if (!active || el.classList.contains('gone')) return;
+  el.classList.add('gone');
+  setTimeout(() => el.classList.remove('gone'), 8000);
+  queue.push({f, at: Date.now()});
+  renderQueue();
+  say(`${f.n} is swishing in the broth (${f.t}s).`);
+}
+
+const isReady = q => (Date.now() - q.at) / 1000 >= q.f.t;
+
+function renderQueue(){
+  const el = $('queue');
+  if (!queue.length) { el.innerHTML = '<span class="lbl" style="margin:0">Empty</span>'; return; }
+  el.innerHTML = queue.map(q => {
+    const left = Math.max(0, q.f.t - (Date.now() - q.at) / 1000);
+    return `<div class="cook ${left <= 0 ? 'ready' : ''}">${q.f.e}<em>${left <= 0 ? 'ready' : left.toFixed(1) + 's'}</em></div>`;
+  }).join('');
+}
+
+function eat(){
+  if (!active) return;
+  const ready = queue.filter(isReady);
+  if (!ready.length) {
+    if (!queue.length) return say('Add food from the belt first.');
+    const next = Math.min(...queue.map(q => q.f.t - (Date.now() - q.at) / 1000));
+    return say(`Not ready yet. Wait ${next.toFixed(1)}s.`);
+  }
+  const now = Date.now();
+  combo = (now - lastEat < 3000) ? Math.min(combo + 1, 5) : 1;
+  lastEat = now;
+  let gain = 0, matched = false;
+  ready.forEach(q => {
+    const hit = q.f.m.includes(dip);
+    matched = matched || hit;
+    gain += Math.round(q.f.p * (hit ? 1.5 : 1) * combo);
+    bites++;
+    const s = document.createElement('span');
+    s.className = 'eaten'; s.textContent = q.f.e;
+    $('bowl').appendChild(s);
+    if ($('bowl').children.length > 20) $('bowl').firstChild.remove();
+  });
+  score += gain;
+  queue = queue.filter(q => !ready.includes(q));
+  renderStats(); renderQueue();
+  flash(`+${gain}${combo > 1 ? ' x' + combo : ''}`);
+  say(matched ? `${DIPS[dip]} was a perfect match. +${gain}` : `Eaten. +${gain}. Try a matching sauce for a bonus.`);
+}
+
+function flash(t){
+  const f = $('flash'); f.textContent = t; f.style.opacity = 1;
+  setTimeout(() => f.style.opacity = 0, 700);
+}
+
+function renderStats(){
+  $('score').textContent = score;
+  $('bites').textContent = bites;
+  $('combo').textContent = 'x' + combo;
+}
+
+function bubble(){
+  const b = document.createElement('div');
+  const s = 6 + Math.random() * 10;
+  b.className = 'bubble';
+  b.style.cssText = `width:${s}px;height:${s}px;left:${10 + Math.random() * 80}%;`;
+  $('broth').appendChild(b);
+  setTimeout(() => b.remove(), 1300);
+}
+
+function loop(){
+  timeLeft -= 0.1;
+  $('bar').style.width = Math.max(0, timeLeft / DURATION * 100) + '%';
+  renderQueue();
+  if (timeLeft <= 0) end();
+}
+
+function end(){
+  active = false;
+  clearInterval(tick); clearInterval(bubbles);
+  const rank = score < 200 ? 'Beginner eater' : score < 500 ? 'Shabu apprentice' : score < 900 ? 'Hot pot master' : 'Legendary shabu champion';
+  $('final').innerHTML = `Score ${score} · Bites ${bites}<br>${rank}`;
+  show('over');
+}
+
+$('startBtn').onclick = start;
+$('againBtn').onclick = start;
+$('pot').onclick = eat;
+$('pot').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); eat(); } };
+document.querySelectorAll('.dip').forEach(d => {
+  const pick = () => {
+    dip = d.dataset.d;
+    document.querySelectorAll('.dip').forEach(x => x.classList.toggle('on', x === d));
+    if (active) say(`Sauce: ${DIPS[dip]}.`);
+  };
+  d.onclick = pick;
+  d.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+});
+</script>
+</body>
+</html>
