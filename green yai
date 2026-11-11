@@ -1,0 +1,204 @@
+      <!DOCTYPE html >
+<html lang="th"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>กรีดยาง + รีดยาง</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@500;700&display=swap">
+<style>
+:root{--bg:#efe7d6;--fg:#2b2118;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0a0f1c;--fg:#efe7d6;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0a0f1c;--fg:#efe7d6;color-scheme:dark}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;height:100%;display:grid;place-items:center;overflow:hidden;background:var(--bg);color:var(--fg);font-family:Sarabun,"Noto Sans Thai",sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;border-radius:14px;touch-action:none}
+</style></head><body><canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d'),W=360,H=640,CX=180;
+C.width=W;C.height=H;
+function fit(){const b=document.body,s=Math.min(b.clientWidth/W,b.clientHeight/H);C.style.width=W*s+'px';C.style.height=H*s+'px'}
+addEventListener('resize',fit);fit();
+const FT=(n,w)=>`${w||700} ${n}px Sarabun,"Noto Sans Thai",sans-serif`;
+let best=0;try{best=+localStorage.getItem('rtr_best')||0}catch(e){}
+let S='title',time=60,score=0,lives=3,combo=0,prog=0,cutting=false,sp=0,cutT=0,startP=0,tree=null,msg='',msgT=0,drops=[],ptr=null,drag=false,overT=0,flash=0,pulse=0;
+const A={x:CX-56,y:250},B={x:CX+56,y:318},V={x:B.x-A.x,y:B.y-A.y},L2=V.x*V.x+V.y*V.y,LEN=Math.sqrt(L2),CY=420;
+const BD=[[.35,1.4],[.5,1.05],[.65,.9]];let sandbox=false,todI=0,dif=1,trees=0;
+const lerp=(a,b,t)=>a+(b-a)*t,mix=(a,b,t)=>`rgb(${a.map((v,i)=>lerp(v,b[i],t)|0)})`;
+function newTree(){tree={ox:W,done:false,leave:.8,w:142+Math.random()*22|0}}
+function start(){S='play';trees=0;if(!sandbox)dif=1;time=45;score=0;lives=3;combo=0;prog=0;cutting=false;sp=0;msg='';msgT=0;drops=[];flash=0;newTree()}
+function say(t){msg=t;msgT=1.2}
+const P=e=>{const r=C.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}};
+C.addEventListener('pointerdown',e=>{C.setPointerCapture(e.pointerId);ptr=P(e);drag=true;
+  if(S==='title'){sandbox=ptr.y>=449;start()}
+  else if(S==='over'){if(overT>.7)start()}
+  else if(S==='roll'){if(Math.hypot(ptr.x-WX,ptr.y-WY)<140){grab=true;phi=wa=Math.atan2(ptr.y-WY,ptr.x-WX);hint=false}}
+  else if(sandbox&&ptr.y>585){const i=ptr.x<122?0:ptr.x<238?1:2;drag=false;if(i===0)todI=(todI+1)%3;else if(i===1)dif=(dif+1)%3;else{S='title';cutting=false;prog=0}}
+});
+C.addEventListener('pointermove',e=>{ptr=P(e)});
+const up=()=>{drag=false;grab=false;crankT=0;if(cutting){cutting=false;prog=0}};
+C.addEventListener('pointerup',up);C.addEventListener('pointercancel',up);
+
+function finish(){
+  cutting=false;const v=(prog-startP)/Math.max(cutT,.05);prog=1;tree.done=true;trees++;tree.leave=.8;let y;
+  if(v>BD[dif][1]){y=4;combo=0;say('เร็วไป! ตื้นเกิน +'+y)}
+  else if(v<BD[dif][0]){y=3;combo=0;if(!sandbox)lives--;flash=.45;say('ช้าไป! ลึกเกิน ต้นยางช้ำ')}
+  else{combo++;y=Math.round(12*(1+Math.min(combo-1,8)*.2));say((combo>1?'สุดยอด x'+combo:'พอดี!')+' +'+y)}
+  score+=y;for(let i=0;i<Math.min(y,24);i++)drops.push({x:B.x+(Math.random()-.5)*6,y:B.y+4-Math.random()*50,v:0});
+}
+function cut(dt){
+  if(!drag||!ptr||tree.ox>0||tree.done)return;
+  const px=ptr.x-A.x,py=ptr.y-A.y,u=(px*V.x+py*V.y)/L2,d=Math.abs(px*V.y-py*V.x)/LEN;
+  if(!cutting){if(u>-.05&&u<.2&&d<26){cutting=true;prog=Math.max(0,u);startP=prog;cutT=0;sp=0}return}
+  if(d>38||u<prog-.15){cutting=false;prog=0;combo=0;say('พลาด! มีดหลุดรอย');return}
+  cutT+=dt;
+  if(u>prog){const dp=Math.min(u-prog,.3);sp=sp*.85+(dp/dt)*.15;prog+=dp;if(prog>.45&&Math.random()<.3)drops.push({x:B.x,y:B.y+4,v:0})}
+  else sp*=.9;
+  if(prog>=.97)finish();
+}
+function update(dt){
+  pulse+=dt;if(S==='over')overT+=dt;if(S==='roll'){rollUpd(dt);return}
+  if(S!=='play')return;
+  if(!sandbox)time=Math.max(0,time-dt);msgT-=dt;flash-=dt;
+  if(!tree.done&&tree.ox>0)tree.ox=Math.max(0,tree.ox-700*dt);
+  cut(dt);
+  if(tree.done){tree.leave-=dt;if(tree.leave<=0){tree.ox-=900*dt;if(tree.ox<-W){prog=0;newTree()}}}
+  for(const d of drops){d.v+=900*dt;d.y+=d.v*dt}
+  drops=drops.filter(d=>d.y<CY+14);
+  if(!sandbox&&(time<=0||lives<=0)){cutting=false;drag=false;toRoll()}
+}
+function cupPath(){X.beginPath();X.moveTo(B.x-28,CY);X.lineTo(B.x+28,CY);X.quadraticCurveTo(B.x+24,CY+44,B.x,CY+46);X.quadraticCurveTo(B.x-24,CY+44,B.x-28,CY);X.closePath()}
+function T(s,x,y,n,c,w){X.font=FT(n,w);X.fillStyle=c;X.textAlign='center';X.fillText(s,x,y)}
+const SH={x:-24,y:340};
+function player(f){
+  const tp=drag&&ptr&&S==='play'?ptr:{x:A.x-16,y:A.y+14},hand={x:tp.x+9,y:tp.y+16},sh=SH;
+  X.lineCap='round';X.lineJoin='round';
+  const dx=hand.x-sh.x,dy=hand.y-sh.y,d=Math.hypot(dx,dy)||1,l=Math.max(105,d/2+1),h=Math.sqrt(Math.max(l*l-d*d/4,0));
+  let ex=sh.x+dx/2-dy/d*h,ey=sh.y+dy/2+dx/d*h;
+  if(ey<sh.y+dy/2){ex=sh.x+dx/2+dy/d*h;ey=sh.y+dy/2-dx/d*h}
+  X.strokeStyle='#4a7fd0';X.lineWidth=16;X.beginPath();X.moveTo(sh.x,sh.y);X.lineTo(ex,ey);X.lineTo(hand.x,hand.y);X.stroke();
+  X.save();X.translate(tp.x,tp.y);X.rotate(-.5);X.fillStyle='#8a5a2b';X.fillRect(-4,-4,8,34);X.fillStyle='#d8dde2';X.beginPath();X.moveTo(-4,-4);X.lineTo(10,-16);X.lineTo(4,-26);X.lineTo(-4,-14);X.closePath();X.fill();X.restore();
+  X.fillStyle='#d9a066';X.beginPath();X.arc(hand.x,hand.y,6,0,7);X.fill();
+}
+const SB=[['เวลา',12],['ช่วงพอดี',128],['ออก',244]];
+function sbUI(){SB.forEach(([n,x],i)=>{X.fillStyle='rgba(8,12,24,.72)';X.beginPath();X.roundRect?X.roundRect(x,592,104,36,10):X.rect(x,592,104,36);X.fill();const v=i===0?['ดึก','เช้ามืด','เช้า'][todI]:i===1?['ง่าย','ปกติ','ยาก'][dif]:'';T(v?n+': '+v:n,x+52,615,13,'#fff',500)})}
+const WX=180,WY=500,WR=78,RY=314,SEG=38,SW=154/SEG,OX=206,WLO=2,WHI=4,TAU=Math.PI*2,SL=40;
+let lx=0,ro=45,rs=0,rc=0,fin=0,sheets=[],seg=[],rp=0,grab=false,phi=0,wa=-Math.PI/2,th=0,om=0,crankT=0,hold=0,hint=true;
+const rr=(x,y,w,h,r)=>{X.beginPath();X.roundRect?X.roundRect(x,y,w,h,r):X.rect(x,y,w,h)};
+function endAll(){S='over';overT=0;grab=false;fin=rs;if(fin>best){best=fin;try{localStorage.setItem('rtr_best',best)}catch(e){}}}
+function toRoll(){lx=score;ro=45;rs=0;rc=0;sheets=[];seg=[];rp=0;hold=0;grab=false;om=0;crankT=0;hint=true;msg='';msgT=0;if(lx<SL)endAll();else S='roll'}
+function rdone(){
+  const ok=seg.filter(v=>v===1).length/SEG,g=ok>=.75?1:ok>=.45?2:3;
+  rc=g===1?rc+1:0;
+  const y=Math.round([0,30,18,8][g]*(g===1?1+Math.min(rc-1,5)*.2:1));
+  rs+=y;lx-=SL;sheets.push(g);hold=.9;
+  say(g===1?'ยางแผ่นเกรด 1! +'+y+(rc>1?'  x'+rc:''):g===2?'เกรด 2 +'+y:'เกรด 3 ไม่สม่ำเสมอ +'+y);
+}
+function rollUpd(dt){
+  ro=Math.max(0,ro-dt);msgT-=dt;
+  let d=0;
+  if(hold>0){hold-=dt;if(hold<=0){seg=[];rp=0;if(lx<SL){endAll();return}}}
+  else if(grab&&ptr){
+    const a=Math.atan2(ptr.y-WY,ptr.x-WX);let x=a-phi;
+    if(x>Math.PI)x-=TAU;if(x<-Math.PI)x+=TAU;
+    phi=a;wa=a;
+    if(x>0&&x<1.2){d=x;th+=x}
+  }
+  om=om*.85+(d/dt)*.15;
+  if(d>0){
+    crankT+=dt;rp=Math.min(1,rp+d/15.7);
+    const ty=crankT<.35?1:om<WLO?0:om>WHI?2:1;
+    while(seg.length<Math.floor(rp*SEG))seg.push(ty);
+    if(rp>=1)rdone();
+  }
+  if(ro<=0)endAll();
+}
+function rollDraw(){
+  const g=X.createLinearGradient(0,0,0,H);g.addColorStop(0,'#e9dcc0');g.addColorStop(1,'#bfa578');
+  X.fillStyle=g;X.fillRect(0,0,W,H);
+  X.strokeStyle='rgba(90,60,30,.12)';X.lineWidth=2;
+  for(let x=0;x<W;x+=45){X.beginPath();X.moveTo(x,0);X.lineTo(x,580);X.stroke()}
+  X.fillStyle='#5a4330';X.fillRect(0,580,W,60);
+  X.strokeStyle='#4a3626';X.lineWidth=6;X.beginPath();X.moveTo(18,84);X.lineTo(342,84);X.stroke();
+  sheets.slice(-12).forEach((s,i)=>{X.fillStyle=['','#f3d58a','#d9b266','#a8844a'][s];X.fillRect(24+i*26,86,22,44)});
+  X.fillStyle='#39424b';X.fillRect(140,250,80,128);
+  if(hold<=0){const sx=154*rp;X.fillStyle='#f8f3e6';rr(sx,RY-12,154-sx,24,8);X.fill();X.strokeStyle='rgba(0,0,0,.15)';X.lineWidth=2;X.stroke()}
+  seg.forEach((t,i)=>{const tk=[14,6,5][t],jy=t===2?Math.sin(i*1.7)*3:0;X.fillStyle=['#efe3bd','#fbf3dc','#d8b873'][t];X.fillRect(OX+i*SW,RY-tk/2+jy,SW+.6,tk)});
+  [[RY-27,1],[RY+27,-1]].forEach(([y,s])=>{
+    X.fillStyle='#8c949c';X.beginPath();X.arc(180,y,26,0,7);X.fill();X.strokeStyle='#5b646d';X.lineWidth=3;X.stroke();
+    const r=th*2*s;X.strokeStyle='rgba(255,255,255,.55)';X.beginPath();X.moveTo(180,y);X.lineTo(180+22*Math.cos(r),y+22*Math.sin(r));X.stroke();
+  });
+  X.strokeStyle='#5b646d';X.lineWidth=10;X.beginPath();X.moveTo(WX,WY);X.lineTo(WX,378);X.stroke();
+  X.strokeStyle='#4a3626';X.lineWidth=12;X.beginPath();X.arc(WX,WY,WR,0,7);X.stroke();
+  X.lineWidth=6;X.lineCap='round';
+  for(let k=0;k<4;k++){const a=wa+k*Math.PI/2;X.beginPath();X.moveTo(WX,WY);X.lineTo(WX+WR*Math.cos(a),WY+WR*Math.sin(a));X.stroke()}
+  X.fillStyle='#39424b';X.beginPath();X.arc(WX,WY,14,0,7);X.fill();
+  const kx=WX+WR*Math.cos(wa),ky=WY+WR*Math.sin(wa);
+  if(hint){X.strokeStyle=`rgba(255,209,102,${.5+.5*Math.sin(pulse*5)})`;X.lineWidth=4;X.beginPath();X.arc(kx,ky,24,0,7);X.stroke();T('จับวงล้อ แล้วหมุนตามเข็มนาฬิกา',CX,612,15,'#fff',500)}
+  X.fillStyle='#d9a066';X.beginPath();X.arc(kx,ky,14,0,7);X.fill();X.strokeStyle='#7a4f27';X.lineWidth=3;X.stroke();
+  X.fillStyle='rgba(0,0,0,.4)';X.fillRect(0,0,W,56);
+  X.textAlign='left';X.font=FT(20);X.fillStyle='#fff';X.fillText('⏱ '+Math.ceil(ro),14,36);
+  T('คะแนน '+rs,CX,36,20,'#fffdf5');
+  X.textAlign='right';X.font=FT(16);X.fillText('น้ำยาง '+lx+' ก.',W-14,36);
+  X.fillStyle='rgba(40,25,10,.25)';X.fillRect(40,150,280,12);
+  X.fillStyle='#5fd38d';X.fillRect(40+WLO/6*280,150,(WHI-WLO)/6*280,12);
+  T('หนา',40,184,13,'#5a3a1a');T('ย่น',320,184,13,'#5a3a1a');
+  if(grab){X.fillStyle='#fff';X.strokeStyle='#5a3a1a';X.lineWidth=1;const mx=40+Math.min(om,6)/6*280-2;X.fillRect(mx,144,4,24);X.strokeRect(mx,144,4,24)}
+  if(rc>1)T('คอมโบ x'+rc,CX,212,16,'#8a5a00');
+  if(msgT>0){X.globalAlpha=Math.min(1,msgT*2);X.lineWidth=4;X.strokeStyle='rgba(0,0,0,.55)';X.font=FT(22);X.textAlign='center';X.strokeText(msg,CX,252);X.fillStyle='#fff';X.fillText(msg,CX,252);X.globalAlpha=1}
+}
+function panel(){X.fillStyle='rgba(8,12,24,.8)';X.beginPath();X.roundRect?X.roundRect(30,150,300,340,18):X.rect(30,150,300,340);X.fill()}
+function draw(){if(S==='roll'){rollDraw();return}
+  const f=S==='play'?(sandbox?[0,.5,1][todI]:1-time/45):S==='over'?1:0;
+  const g=X.createLinearGradient(0,0,0,H);g.addColorStop(0,mix([8,14,40],[96,150,200],f));g.addColorStop(1,mix([20,40,60],[250,170,110],f));
+  X.fillStyle=g;X.fillRect(0,0,W,H);
+  X.fillStyle=mix([6,16,22],[40,80,50],f);
+  for(let i=0;i<6;i++){const x=i*70+20;X.fillRect(x,120,14,460);X.beginPath();X.ellipse(x+7,120,34,60,0,0,7);X.fill()}
+  X.fillStyle=`rgba(255,255,255,${.05+.1*f})`;X.fillRect(0,430,W,140);
+  X.fillStyle=mix([10,18,14],[60,90,50],f);X.fillRect(0,570,W,70);
+  const ox=tree?tree.ox:0,tw=tree?tree.w:150,tx=CX-tw/2,done=tree&&tree.done;
+  X.save();X.translate(ox,0);
+  const tg=X.createLinearGradient(tx,0,tx+tw,0);tg.addColorStop(0,'#4a3425');tg.addColorStop(.5,'#7d5a40');tg.addColorStop(1,'#3e2a1d');
+  X.fillStyle=tg;X.fillRect(tx,0,tw,575);
+  X.strokeStyle='rgba(0,0,0,.18)';X.lineWidth=2;
+  for(let i=0;i<6;i++){const x=tx+10+i*(tw-20)/5;X.beginPath();X.moveTo(x,0);X.bezierCurveTo(x+6,150,x-6,350,x+3,575);X.stroke()}
+  X.lineCap='round';
+  X.beginPath();X.moveTo(A.x,A.y);X.lineTo(B.x,B.y);
+  if(done){X.strokeStyle='rgba(30,15,8,.7)';X.lineWidth=8;X.stroke()}
+  else{X.setLineDash([8,7]);X.strokeStyle='rgba(255,240,200,.8)';X.lineWidth=3;X.stroke();X.setLineDash([])}
+  if(prog>0){X.beginPath();X.moveTo(A.x,A.y);X.lineTo(A.x+V.x*prog,A.y+V.y*prog);X.strokeStyle='#fffdf5';X.lineWidth=6;X.shadowColor='#fff';X.shadowBlur=8;X.stroke();X.shadowBlur=0}
+  X.strokeStyle='#bbb';X.lineWidth=2;X.beginPath();X.moveTo(B.x,B.y);X.lineTo(B.x,CY);X.stroke();
+  cupPath();X.fillStyle='#b9653a';X.fill();
+  X.save();cupPath();X.clip();const lv=Math.min(score/500,1)*36;X.fillStyle='#fffdf5';X.fillRect(B.x-30,CY+46-lv,60,lv);X.restore();
+  X.fillStyle='#fffdf5';for(const d of drops){X.beginPath();X.arc(d.x,d.y,3,0,7);X.fill()}
+  X.restore();
+  player(f);
+  const lp=drag&&ptr?ptr:{x:CX,y:290},rg=X.createRadialGradient(lp.x,lp.y,30,lp.x,lp.y,300);
+  rg.addColorStop(0,'rgba(0,5,25,0)');rg.addColorStop(1,`rgba(0,5,25,${.6*(1-f)})`);X.fillStyle=rg;X.fillRect(0,0,W,H);
+  
+  if(S==='play'){
+    X.fillStyle='rgba(0,0,0,.35)';X.fillRect(0,0,W,56);
+    X.textAlign='left';X.font=FT(20);X.fillStyle='#fff';X.fillText(sandbox?'โหมดอิสระ':'⏱ '+Math.ceil(time),14,36);
+    T('น้ำยาง '+score+' ก.',CX,36,20,'#fffdf5');
+    X.textAlign='right';X.font=FT(22);if(sandbox){X.font=FT(16);X.fillStyle='#fff';X.fillText('ต้นที่ '+(trees+1),W-14,36)}else for(let i=0;i<3;i++){X.fillStyle=i<lives?'#ff6b6b':'rgba(255,255,255,.35)';X.fillText(i<lives?'♥':'♡',W-14-i*24,36)}
+    X.fillStyle='rgba(255,255,255,.25)';X.fillRect(40,78,280,12);
+    X.fillStyle='#5fd38d';X.fillRect(40+BD[dif][0]/2*280,78,(BD[dif][1]-BD[dif][0])/2*280,12);
+    T('ลึก',40,108,13,'#ffd0d0');T('ตื้น',320,108,13,'#ffd0d0');
+    if(cutting){X.fillStyle='#fff';X.fillRect(40+Math.min(sp,2)/2*280-2,72,4,24)}
+    if(combo>1)T('คอมโบ x'+combo,CX,132,16,'#ffd166');
+    if(msgT>0){X.globalAlpha=Math.min(1,msgT*2);X.lineWidth=4;X.strokeStyle='rgba(0,0,0,.6)';X.font=FT(24);X.textAlign='center';X.strokeText(msg,CX,200);X.fillStyle='#fff';X.fillText(msg,CX,200);X.globalAlpha=1}
+    if(flash>0){X.fillStyle=`rgba(255,0,0,${flash})`;X.fillRect(0,0,W,H)}
+    if(sandbox)sbUI();
+  }
+  if(S==='title'){
+    panel();T('กรีด+รีดยาง',CX,215,40,'#fff');T('จากสวนยางสู่โรงรีดแผ่น',CX,245,16,'#e8d9b5',500);
+    ['1) กรีดยาง: ลากมีดตามเส้นประ','ช้าไป = ลึก · เร็วไป = ตื้น','2) รีดยาง: หมุนวงล้อตามเข็ม','จังหวะคงที่ = ยางแผ่นเกรดสูง','กรีด 45 วิ แล้วรีดแผ่น 45 วิ'].forEach((s,i)=>T(s,CX,293+i*27,15,'#fff',500));
+    [['กรีด + รีดยาง',412],['โหมดอิสระ (แซนด์บ็อกซ์)',452]].forEach(([n,y],i)=>{X.fillStyle=i?'rgba(95,211,141,.92)':'rgba(255,209,102,.95)';X.beginPath();X.roundRect?X.roundRect(55,y,250,34,12):X.rect(55,y,250,34);X.fill();T(n,CX,y+23,17,'#1b1409')});
+  }
+  if(S==='over'){
+    panel();T('จบวัน!',CX,215,30,'#fff');T('น้ำยาง '+score+' ก. · ยางแผ่น '+sheets.length+' แผ่น',CX,265,16,'#e8d9b5',500);
+    T(fin+' คะแนน',CX,320,44,'#fffdf5');T(fin>0&&fin>=best?'สถิติใหม่!':'สถิติสูงสุด '+best,CX,365,18,'#ffd166');
+    if(overT>.7){X.globalAlpha=.6+.4*Math.sin(pulse*4);T('แตะเพื่อเล่นอีกครั้ง',CX,445,22,'#ffd166');X.globalAlpha=1}
+  }
+}
+let lt=performance.now();
+function loop(n){const dt=Math.min((n-lt)/1000,.05)||.016;lt=n;update(dt);draw();requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
+</script></body></html>
